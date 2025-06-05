@@ -1,11 +1,6 @@
 {
     "jhon": [
         {
-            "titulo": "Ingles",
-            "contenido": "tarea_1",
-            "fecha": "2025-05-07"
-        },
-        {
             "titulo": "calculo",
             "contenido": "ghjgjhg",
             "fecha": "2025-05-30"
@@ -34,6 +29,26 @@
             "titulo": "1",
             "contenido": "1",
             "fecha": "2025-05-08"
+        },
+        {
+            "titulo": "sociales",
+            "contenido": "ndsajkhdkjd",
+            "fecha": "2025-06-12"
+        },
+        {
+            "titulo": "u",
+            "contenido": "bnvvhgvj",
+            "fecha": "2025-06-06"
+        },
+        {
+            "titulo": "naturales",
+            "contenido": "hdwhdgdqj",
+            "fecha": "2025-06-18"
+        },
+        {
+            "titulo": "b",
+            "contenido": "regewrgwr",
+            "fecha": "2025-06-05"
         }
     ],
     "": []

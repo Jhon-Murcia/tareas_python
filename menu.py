@@ -7,15 +7,23 @@ from tareas import agregar_tarea, ver_tareas # Importa las funciones agregar_tar
 from calendario import mostrar_calendario # Importa la función mostrar_calendario desde el módulo 'calendario.py'.
 
 class MenuPrincipal: # Define la clase MenuPrincipal, que representa la ventana principal del menú de la aplicación después del login.
-    def __init__(self, usuario): # Define el método constructor de la clase, que se ejecuta al crear una nueva instancia de MenuPrincipal.
+    def __init__(self, main_root, usuario, on_logout_callback=None): # Define el método constructor de la clase. Ahora recibe 'main_root' como la ventana raíz.
         """
         Inicializa la ventana principal del menú.
         
         Args:
+            main_root (tk.Tk): La instancia de la ventana raíz principal de Tkinter.
             usuario (str): El nombre del usuario logueado.
+            on_logout_callback (function): Función a llamar cuando el usuario cierra sesión.
         """ # Docstring que describe la función y sus argumentos.
-        self.usuario = usuario # Almacena el nombre de usuario (pasado como argumento) en una variable de instancia.
-        self.root = tk.Tk() # Crea la ventana principal (raíz) de la aplicación Tkinter para el menú.
+        self.root = main_root # Almacena la ventana raíz *pasada* como argumento (la misma de main.py).
+        self.usuario = usuario # Almacena el nombre de usuario.
+        self.on_logout_callback = on_logout_callback # Almacena la función de callback para el cierre de sesión.
+
+        # Limpiar widgets existentes en la ventana principal (si los hay del login)
+        for widget in self.root.winfo_children(): # Itera sobre todos los widgets hijos de la ventana principal (limpiando el login).
+            widget.destroy() # Destruye cada widget hijo.
+
         self.root.title("Administrador de Tareas") # Establece el título de la ventana del menú.
         self.root.attributes('-fullscreen', True) # Configura la ventana para que se abra en modo de pantalla completa.
 
@@ -26,22 +34,24 @@ class MenuPrincipal: # Define la clase MenuPrincipal, que representa la ventana 
             fondo_img = fondo_img.resize((self.root.winfo_screenwidth(), self.root.winfo_screenheight()), Image.Resampling.LANCZOS) # Redimensiona la imagen para que coincida con el tamaño de la pantalla, usando un algoritmo de remuestreo de alta calidad.
             fondo_photo = ImageTk.PhotoImage(fondo_img) # Convierte la imagen PIL a un formato compatible con Tkinter (PhotoImage).
             fondo_label = tk.Label(self.root, image=fondo_photo) # Crea un Label para mostrar la imagen de fondo.
-            fondo_label.image = fondo_photo # Mantiene una referencia a la imagen para evitar que sea eliminada por el recolector de basura de Python.
+            fondo_label.image = fondo_photo # Mantiene una referencia a la imagen para evitar que sea recolectada por el garbage collector.
             fondo_label.place(x=0, y=0, relwidth=1, relheight=1) # Coloca el Label de fondo para que ocupe toda la ventana.
         except Exception as e: # Captura cualquier excepción que ocurra durante la carga de la imagen.
             print(f"Error al cargar la imagen de fondo del menú: {e}") # Imprime el error en la consola.
             self.root.configure(bg="#f0f4f7") # Si la imagen no carga, establece un color de fondo alternativo para la ventana.
 
-        # Título superior "Bienvenido, [Usuario]" (AHORA MUCHO MÁS GRANDE)
+        # Título superior "Bienvenido, [Usuario]"
         titulo = tk.Label(self.root, text=f"Bienvenido, {usuario}", font=("Helvetica", 56, "bold"), fg="black", bg="white") # Crea un Label para el título de bienvenida, con una fuente grande y en negrita.
         titulo.pack(pady=50) # Empaqueta el título en la ventana, añadiendo un padding vertical para más espacio.
 
         # Contenedor con fondo blanco para las tarjetas de opciones
-        contenedor = tk.Frame(self.root, bg="white", padx=20, pady=20) # Crea un Frame que servirá como contenedor principal para las tarjetas de opciones, con fondo blanco y padding interno.
+        # CAMBIO: Fondo de contenedor a azul pastel
+        contenedor = tk.Frame(self.root, bg="#E0F2F7", padx=20, pady=20) # Crea un Frame que servirá como contenedor principal para las tarjetas de opciones, con fondo azul pastel y padding interno.
         contenedor.place(relx=0.5, rely=0.45, anchor="center") # Coloca el contenedor centrado en la pantalla (50% del ancho, 45% del alto).
 
         # Frame para las tarjetas dentro del contenedor (para organizar horizontalmente)
-        frame_botones = tk.Frame(contenedor, bg="white") # Crea un Frame dentro del contenedor para organizar los botones/tarjetas horizontalmente.
+        # CAMBIO: Fondo de frame_botones a azul pastel
+        frame_botones = tk.Frame(contenedor, bg="#E0F2F7") # Crea un Frame dentro del contenedor para organizar los botones/tarjetas horizontalmente, con fondo azul pastel.
         frame_botones.pack() # Empaqueta este Frame de botones.
 
         # Opciones del menú
@@ -61,23 +71,41 @@ class MenuPrincipal: # Define la clase MenuPrincipal, que representa la ventana 
         tk.Button( # Crea el botón "Salir".
             self.root, # Se coloca directamente en la ventana principal del menú.
             text="Salir", # Texto del botón.
-            font=("Helvetica", 10), # Fuente del texto.
+            font=("Helvetica", 14, "bold"), # Fuente del texto, ahora más grande.
             command=self.root.quit, # Comando que se ejecuta al hacer clic: cierra la aplicación por completo.
             bg="#E74C3C", # Color de fondo del botón (rojo).
             fg="white", # Color del texto del botón.
             activebackground="#C0392B", # Color de fondo cuando el botón está activo (presionado).
-            relief="flat" # Estilo de relieve plano.
+            relief="flat", # Estilo de relieve plano.
+            padx=15, # Añadido padding horizontal.
+            pady=8 # Añadido padding vertical.
         ).place(x=10, y=10) # Coloca el botón en la esquina superior izquierda con un pequeño margen.
 
-        self.root.mainloop() # Inicia el bucle principal de eventos de Tkinter para esta ventana. Este método mantiene la ventana abierta y esperando interacciones del usuario.
+        # Botón Cerrar Sesión (Esquina superior derecha)
+        tk.Button( # Crea el botón "Cerrar Sesión".
+            self.root, # Se coloca directamente en la ventana principal del menú.
+            text="Cerrar Sesión", # Texto del botón.
+            font=("Helvetica", 14, "bold"), # Fuente del texto, consistente con el botón "Salir".
+            command=self.logout, # Comando que se ejecuta al hacer clic: llama al método logout de la clase.
+            bg="#3498DB", # Color de fondo del botón (azul).
+            fg="white", # Color del texto del botón.
+            activebackground="#2980B9", # Color de fondo cuando el botón está activo.
+            relief="flat", # Estilo de relieve plano.
+            padx=15, # Añadido padding horizontal.
+            pady=8 # Añadido padding vertical.
+        ).place(relx=1.0, x=-10, y=10, anchor="ne") # Coloca el botón en la esquina superior derecha con un pequeño margen.
+
+        # Eliminar el mainloop de aquí, ya que la ventana raíz lo tiene
+        # self.root.mainloop() 
 
     def crear_tarjeta_opcion(self, parent, texto, icono_path, comando):
         """
         Crea una tarjeta visual para cada opción del menú con un borde.
         """ # Docstring que describe la función.
+        # CAMBIO: Fondo de la tarjeta a azul pastel
         card = tk.Frame( # Crea un Frame que servirá como la "tarjeta" individual para cada opción.
             parent, # El Frame se coloca dentro del 'parent' (frame_botones).
-            bg="white", # Color de fondo de la tarjeta.
+            bg="#E0F2F7", # Color de fondo de la tarjeta a azul pastel.
             width=150, # Ancho fijo de la tarjeta.
             height=170, # Altura fija de la tarjeta.
             highlightbackground="#d9d9d9",  # Color del borde gris claro (usando highlight para simular un borde).
@@ -92,20 +120,32 @@ class MenuPrincipal: # Define la clase MenuPrincipal, que representa la ventana 
             icono_img = Image.open(icono_path) # Abre la imagen del icono desde la ruta especificada.
             icono_img = icono_img.resize((60, 60), Image.Resampling.LANCZOS) # Redimensiona la imagen del icono a 60x60 píxeles.
             icono = ImageTk.PhotoImage(icono_img) # Convierte la imagen PIL a un formato compatible con Tkinter.
-            lbl_icono = tk.Label(card, image=icono, bg="white") # Crea un Label para mostrar el icono dentro de la tarjeta.
-            lbl_icono.image = icono # Mantiene una referencia a la imagen del icono.
+            # CAMBIO: Fondo del icono a azul pastel
+            lbl_icono = tk.Label(card, image=icono, bg="#E0F2F7") # Crea un Label para mostrar el icono dentro de la tarjeta, con fondo azul pastel.
+            lbl_icono.image = icono # Mantiene una referencia a la imagen para evitar que sea eliminada por el recolector de basura de Python.
             lbl_icono.pack(pady=(15, 10)) # Empaqueta el Label del icono con padding vertical.
         except Exception as e: # Captura cualquier excepción si la imagen del icono no se puede cargar.
             print(f"Error al cargar icono {icono_path}: {e}") # Imprime el error en la consola.
-            lbl_icono = tk.Label(card, text="📄", font=("Helvetica", 28), bg="white") # Si falla, usa un emoji de documento como icono de fallback.
+            # CAMBIO: Fondo del emoji fallback a azul pastel
+            lbl_icono = tk.Label(card, text="📄", font=("Helvetica", 28), bg="#E0F2F7") # Si falla, usa un emoji de documento como icono de fallback, con fondo azul pastel.
             lbl_icono.pack(pady=(15, 10)) # Empaqueta el Label del emoji.
 
         # Etiqueta de texto para la opción
-        tk.Label(card, text=texto, font=("Helvetica", 12, "bold"), bg="white", fg="#333").pack() # Crea un Label para el texto de la opción y lo empaqueta.
+        # CAMBIO: Fondo de la etiqueta de texto a azul pastel
+        tk.Label(card, text=texto, font=("Helvetica", 12, "bold"), bg="#E0F2F7", fg="#333").pack() # Crea un Label para el texto de la opción y lo empaqueta, con fondo azul pastel.
 
         # Asocia el comando a toda la tarjeta y a sus widgets internos para una mejor área de clic
         for widget in [card, lbl_icono] + list(card.winfo_children()): # Itera sobre la tarjeta misma, el Label del icono y todos los demás widgets hijos de la tarjeta.
             widget.bind("<Button-1>", lambda e: comando()) # Vincula el evento de clic izquierdo del ratón a cada uno de estos widgets para ejecutar el comando asociado a la opción.
+
+    # Método para cerrar sesión
+    def logout(self): # Define el método que se ejecuta al hacer clic en "Cerrar Sesión".
+        # Limpiar la ventana del menú antes de llamar al callback
+        for widget in self.root.winfo_children(): # Itera sobre todos los widgets hijos de la ventana principal (los del menú).
+            widget.destroy() # Destruye cada widget hijo.
+            
+        if self.on_logout_callback: # Comprueba si se proporcionó una función de callback para el cierre de sesión.
+            self.on_logout_callback() # Llama a la función de callback, que debería volver a mostrar la ventana de login.
 
     # Métodos para las acciones del menú (se mantienen igual)
     def nueva_nota(self): # Define el método que se ejecuta al seleccionar "Nueva nota".

@@ -3,10 +3,17 @@ from tkinter import messagebox # Importa el submódulo messagebox de tkinter, ut
 from PIL import Image, ImageTk # Importa las clases Image y ImageTk del módulo PIL (Pillow), necesarias para trabajar con imágenes (abrir, redimensionar, convertir a formato compatible con Tkinter).
 import json # Importa el módulo json, que permite trabajar con datos en formato JSON (serializar y deserializar).
 import os # Importa el módulo os, que proporciona funciones para interactuar con el sistema operativo, como la gestión de rutas de archivos y directorios.
+import datetime # Importa el módulo datetime para trabajar con fechas y horas, necesario para las notificaciones.
+
 from menu import MenuPrincipal # Importa la clase MenuPrincipal desde el archivo 'menu.py', que representa la ventana principal del menú de la aplicación.
+from tareas import cargar_tareas # Importa la función cargar_tareas directamente desde 'tareas.py' para acceder a los datos de las tareas.
 
 # Ruta al archivo de usuarios
 USUARIOS_FILE = "data/usuarios.json" # Define una constante con la ruta al archivo JSON donde se almacenarán los datos de los usuarios.
+
+# Conjunto global para almacenar las tareas ya notificadas en la sesión actual.
+# Esto evita que una misma tarea genere múltiples notificaciones si la aplicación está abierta.
+_notified_tasks_this_session = set() 
 
 def cargar_usuarios():
     """Carga los usuarios desde el archivo JSON.""" # Docstring que describe la función.
@@ -110,17 +117,17 @@ def setup_login_ui(parent_root):
         fondo_img = fondo_img.resize((parent_root.winfo_screenwidth(), parent_root.winfo_screenheight()), Image.Resampling.LANCZOS) # Redimensiona la imagen para que coincida con el tamaño de la pantalla, usando un algoritmo de remuestreo de alta calidad.
         fondo_photo = ImageTk.PhotoImage(fondo_img) # Convierte la imagen PIL a un formato compatible con Tkinter (PhotoImage).
         fondo_label = tk.Label(parent_root, image=fondo_photo) # Crea un Label para mostrar la imagen de fondo.
-        fondo_label.image = fondo_photo # Mantiene una referencia a la imagen para evitar que sea eliminada por el recolector de basura de Python.
+        fondo_label.image = fondo_photo # Mantener una referencia para evitar que sea recolectada por el garbage collector.
         fondo_label.place(x=0, y=0, relwidth=1, relheight=1) # Coloca el Label de fondo para que ocupe toda la ventana.
     except Exception as e: # Captura cualquier excepción que ocurra durante la carga de la imagen.
         print(f"Error al cargar la imagen de fondo del login: {e}") # Imprime el error en la consola.
         parent_root.configure(bg="#e0e0e0") # Si la imagen no carga, establece un color de fondo alternativo para la ventana.
 
-    # Título "EduPlanner" (AHORA MÁS GRANDE)
+    # Título "EduPlanner"
     titulo = tk.Label(parent_root, text="EduPlanner", font=("Helvetica", 56, "bold"), fg="black", bg=parent_root["bg"]) # Crea un Label para el título principal, con una fuente grande y en negrita.
-    titulo.place(relx=0.5, y=40, anchor="n") # Coloca el título centrado horizontalmente en la parte superior de la ventana.
+    titulo.place(relx=0.5, y=40, anchor="n") # Centrado en la parte superior.
 
-    # --- NUEVO: Frame principal del login con estilo de tarjeta ---
+    # --- Frame principal del login con estilo de tarjeta ---
     login_card_width = 500 # Define el ancho de la "tarjeta" de login.
     login_card_height = 450 # Define la altura de la "tarjeta" de login.
     login_card_frame = tk.Frame(parent_root, bg="#F8F8F8", bd=0, relief="flat", # Crea un Frame para contener los elementos del login, con un fondo claro y sin relieve.
@@ -136,19 +143,37 @@ def setup_login_ui(parent_root):
     login_content_frame = tk.Frame(login_card_frame, bg="#F8F8F8", padx=20, pady=10) # Crea un Frame para los campos de entrada y botones, con un fondo claro y padding interno.
     login_content_frame.pack(expand=True, fill="both") # Empaqueta el Frame para que se expanda y rellene el espacio restante dentro de la tarjeta.
 
+    # --- Mensaje de ayuda para la contraseña ---
+    password_hint_label = tk.Label(login_content_frame, 
+                                    text="La contraseña debe tener mínimo 8 caracteres, incluyendo números y letras.", 
+                                    font=("Helvetica", 9), fg="#666666", bg="#F8F8F8", wraplength=login_card_width-40) # Crea un Label para el mensaje de ayuda de la contraseña.
+    password_hint_label.pack_forget() # Inicialmente oculta el mensaje.
+    # --- Fin mensaje de ayuda ---
+
     # Función auxiliar para crear etiquetas y campos de entrada con estilo
-    def crear_entry_con_etiqueta(parent_frame, texto): # Define una función para crear un par de Label y Entry.
+    def crear_entry_con_etiqueta(parent_frame, texto, is_password=False): # Define una función para crear un par de Label y Entry. Añade un parámetro para identificar el campo de contraseña.
         label = tk.Label(parent_frame, text=texto, font=("Helvetica", 12, "bold"), bg=parent_frame["bg"], fg="#555555") # Crea un Label para la etiqueta del campo.
-        label.pack(anchor="w", pady=(5, 2)) # Empaqueta la etiqueta alineada a la izquierda con padding.
+        label.pack(anchor="w", pady=(5, 2)) # Alineado a la izquierda.
         entry = tk.Entry(parent_frame, font=("Helvetica", 12), bd=1, relief="solid", justify="center", # Crea un campo de entrada (Entry) con estilo de borde y fuente.
                          highlightthickness=1, highlightbackground="#CCCCCC", highlightcolor="#3498DB", width=40) # Añade un borde de resaltado y un ancho fijo.
-        entry.pack(pady=(0, 15), ipadx=5, ipady=5, fill="x", padx=5) # Empaqueta el campo de entrada, con padding, relleno horizontal y padding interno.
+        entry.pack(pady=(0, 15), ipadx=5, ipady=5, fill="x", padx=5) # Padding y expansión.
+
+        if is_password: # Si es el campo de contraseña.
+            def show_hint(event): # Función para mostrar el mensaje de ayuda.
+                password_hint_label.pack(pady=(0, 5)) # Muestra el mensaje con un pequeño padding.
+                
+            def hide_hint(event): # Función para ocultar el mensaje de ayuda.
+                password_hint_label.pack_forget() # Oculta el mensaje.
+
+            entry.bind("<FocusIn>", show_hint) # Cuando el campo de contraseña obtiene el foco, muestra el mensaje.
+            entry.bind("<FocusOut>", hide_hint) # Cuando el campo de contraseña pierde el foco, oculta el mensaje.
+
         return entry # Devuelve el widget Entry creado.
 
     # Variables globales para los campos de entrada (necesarias para las funciones iniciar_sesion y registrar_usuario)
     global usuario_entry, contrasena_entry # Declara estas variables como globales para que puedan ser accedidas y modificadas por las funciones iniciar_sesion y registrar_usuario.
     usuario_entry = crear_entry_con_etiqueta(login_content_frame, "Usuario") # Crea el campo de entrada para el nombre de usuario.
-    contrasena_entry = crear_entry_con_etiqueta(login_content_frame, "Contraseña") # Crea el campo de entrada para la contraseña.
+    contrasena_entry = crear_entry_con_etiqueta(login_content_frame, "Contraseña", is_password=True) # Crea el campo de entrada para la contraseña, indicando que es una contraseña.
     contrasena_entry.config(show="*") # Configura el campo de contraseña para que muestre asteriscos en lugar de los caracteres ingresados.
 
     # Botones personalizados (usando la nueva función de estilo)
@@ -168,7 +193,7 @@ def setup_login_ui(parent_root):
     ).place(x=10, y=10) # Coloca el botón en la esquina superior izquierda con un pequeño margen.
 
 # Función para iniciar sesión
-def iniciar_sesion(current_root):
+def iniciar_sesion(main_root): # Renombrado current_root a main_root para mayor claridad.
     """Maneja la lógica de inicio de sesión.""" # Docstring que describe la función.
     usuario = usuario_entry.get().strip() # Obtiene el texto del campo de usuario y elimina espacios en blanco al inicio/final.
     contrasena = contrasena_entry.get().strip() # Obtiene el texto del campo de contraseña y elimina espacios en blanco.
@@ -176,9 +201,16 @@ def iniciar_sesion(current_root):
 
     if usuario in usuarios and usuarios[usuario] == contrasena: # Comprueba si el usuario existe y la contraseña coincide.
         messagebox.showinfo("Éxito", "Inicio de sesión correcto") # Muestra un mensaje de éxito.
-        current_root.destroy() # Destruye la ventana de login actual.
-        # Inicia el menú principal, pasando el usuario y la función para volver al login
-        MenuPrincipal(usuario) # Crea una instancia de MenuPrincipal, pasando el nombre de usuario.
+        
+        # Limpiar la ventana de login antes de mostrar el menú
+        for widget in main_root.winfo_children(): # Itera sobre todos los widgets hijos de la ventana principal.
+            widget.destroy() # Destruye cada widget hijo.
+        
+        # Instanciar el menú principal, pasando la ventana raíz, el usuario y un callback para volver al login
+        MenuPrincipal(main_root, usuario, on_logout_callback=lambda: setup_login_ui(main_root)) 
+        
+        # Iniciar el comprobador de notificaciones después de iniciar sesión
+        start_notification_checker(main_root, usuario) # Llama a la función para iniciar el ciclo de comprobación de notificaciones.
     else: # Si el usuario o la contraseña son incorrectos.
         messagebox.showerror("Error", "Usuario o contraseña incorrectos") # Muestra un mensaje de error.
 
@@ -188,9 +220,29 @@ def registrar_usuario():
     usuario = usuario_entry.get().strip() # Obtiene el texto del campo de usuario y elimina espacios en blanco.
     contrasena = contrasena_entry.get().strip() # Obtiene el texto del campo de contraseña y elimina espacios en blanco.
 
-    if not usuario or not contrasena: # Comprueba si alguno de los campos está vacío.
-        messagebox.showwarning("Advertencia", "Rellena todos los campos") # Muestra una advertencia.
+    # --- VALIDACIONES ---
+    # Validación: Campos vacíos
+    if not usuario: # Comprueba si el campo de usuario está vacío.
+        messagebox.showwarning("Advertencia", "El campo de usuario no puede estar vacío.") # Muestra una advertencia si el usuario está vacío.
         return # Sale de la función.
+    if not contrasena: # Comprueba si el campo de contraseña está vacío.
+        messagebox.showwarning("Advertencia", "El campo de contraseña no puede estar vacío.") # Muestra una advertencia si la contraseña está vacía.
+        return # Sale de la función.
+
+    # Validación: Contraseña alfanumérica (al menos una letra y un número) y longitud mínima
+    has_letter = False # Bandera para verificar si la contraseña contiene al menos una letra.
+    has_digit = False # Bandera para verificar si la contraseña contiene al menos un dígito.
+    for char in contrasena: # Itera sobre cada carácter de la contraseña.
+        if char.isalpha(): # Si el carácter es una letra.
+            has_letter = True # Establece la bandera de letra a True.
+        elif char.isdigit(): # Si el carácter es un dígito.
+            has_digit = True # Establece la bandera de dígito a True.
+    
+    # Consolidación del mensaje de error de contraseña
+    if len(contrasena) < 8 or not (has_letter and has_digit): # Comprueba si la longitud es menor a 8 O no contiene letras y números.
+        messagebox.showerror("Error de Contraseña", "La contraseña no cumple con los requisitos (mínimo 8 caracteres, incluyendo letras y números).") # Muestra un error consolidado.
+        return # Sale de la función.
+    # --- FIN DE VALIDACIONES ---
 
     usuarios = cargar_usuarios() # Carga la lista de usuarios registrados.
     if usuario in usuarios: # Comprueba si el usuario ya existe.
@@ -203,6 +255,52 @@ def registrar_usuario():
         usuario_entry.delete(0, tk.END) # Borra el contenido del campo de usuario.
         contrasena_entry.delete(0, tk.END) # Borra el contenido del campo de contraseña.
 
+# --- Lógica de Notificaciones de Tareas ---
+def start_notification_checker(root_window, current_user):
+    """
+    Inicia el ciclo de comprobación de notificaciones de tareas.
+    Limpia las tareas notificadas previamente en la sesión.
+    """ # Docstring que describe la función.
+    global _notified_tasks_this_session # Accede a la variable global.
+    _notified_tasks_this_session.clear() # Limpia el conjunto de tareas notificadas al iniciar un nuevo ciclo (ej. al iniciar sesión).
+    _notification_checker_loop(root_window, current_user) # Llama a la función principal del bucle de notificaciones.
+
+def _notification_checker_loop(root_window, current_user):
+    """
+    Comprueba periódicamente las tareas para enviar notificaciones.
+    """ # Docstring que describe la función.
+    # Verifica si la ventana principal aún existe. Si no, detiene el bucle de notificaciones.
+    if not root_window.winfo_exists(): # Comprueba si la ventana principal (root_window) aún existe.
+        return # Si la ventana no existe, sale de la función para detener el bucle.
+
+    today = datetime.date.today() # Obtiene la fecha actual.
+    tomorrow = today + datetime.timedelta(days=1) # Calcula la fecha de mañana.
+    tomorrow_str = tomorrow.strftime('%Y-%m-%d') # Formatea la fecha de mañana a string 'YYYY-MM-DD' para comparar con los datos guardados.
+
+    all_tasks = cargar_tareas() # Carga todas las tareas de todos los usuarios.
+    user_tasks = all_tasks.get(current_user, []) # Obtiene las tareas específicas del usuario actual.
+
+    for task in user_tasks: # Itera sobre cada tarea del usuario.
+        task_due_date = task.get("fecha") # Obtiene la fecha de vencimiento de la tarea.
+        task_title = task.get("titulo", "Tarea sin título") # Obtiene el título de la tarea (con un fallback).
+        
+        # Crea un identificador único para la tarea para esta sesión
+        # Un hash simple del string JSON de la tarea podría ser más robusto si el título y fecha no son únicos
+        task_identifier = (current_user, task_title, task_due_date) # Tupla única para identificar la tarea.
+
+        # Comprueba si la tarea vence mañana y no ha sido notificada en esta sesión
+        if task_due_date == tomorrow_str and task_identifier not in _notified_tasks_this_session: # Si la fecha de vencimiento es mañana y la tarea no ha sido notificada.
+            messagebox.showinfo(
+                "Recordatorio de Tarea", # Título de la notificación.
+                f"¡Recordatorio! La tarea '{task_title}' vence mañana, {task_due_date}." # Mensaje de la notificación.
+            ) # Muestra la notificación.
+            _notified_tasks_this_session.add(task_identifier) # Añade la tarea al conjunto de notificadas para esta sesión.
+            
+    # Programa la próxima comprobación
+    # Se recomienda un intervalo más largo para aplicaciones reales (ej. 86400000 ms para 24 horas)
+    # Usamos 5000 ms (5 segundos) para propósitos de demostración/prueba.
+    root_window.after(5000, lambda: _notification_checker_loop(root_window, current_user)) # Programa la función para que se ejecute de nuevo después de 5 segundos.
+
 # --- Bloque de ejecución principal ---
 if __name__ == "__main__": # Este bloque se ejecuta solo cuando el script se corre directamente (no cuando se importa como módulo).
     # Crea la ventana raíz principal de Tkinter
@@ -211,3 +309,4 @@ if __name__ == "__main__": # Este bloque se ejecuta solo cuando el script se cor
     setup_login_ui(root) # Llama a la función para configurar y mostrar la interfaz de usuario de login en la ventana raíz.
     # Inicia el bucle principal de eventos de Tkinter
     root.mainloop() # Inicia el bucle de eventos de Tkinter. Este método mantiene la ventana abierta y esperando interacciones del usuario.
+ 
